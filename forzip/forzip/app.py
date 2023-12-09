@@ -51,16 +51,22 @@ def login():
     try:
         username = request.form.get('username')
         password = request.form.get('password')
+        
+
+        # Check for specific credentials to block
+        if username == 'ADMIN' and password == 'ADMIN':
+            return render_template('index.html', error_message='Invalid username or password. Please try again.')
 
         if session.get('login_attempts', 0) >= 4:
             flash('Too many unsuccessful login attempts. Please try again later.', 'error')
             return render_template('index.html', error_message='Login attempts error', show_attempts_error=True)
 
-        if not is_input_safe(username) or not is_input_safe(password):
-            raise ValueError('Invalid input. Possible SQL injection or XSS attack detected.')
-
+        # Use parameterized queries to prevent SQL injection
         sql = "SELECT * FROM usrs WHERE name = %s AND password = %s"
         values = (username, password)
+
+        if not is_input_safe(username) or not is_input_safe(password):
+            raise ValueError('Invalid input. Possible SQL injection or XSS attack detected.')
 
         db = get_db()
         cursor = db.cursor()
@@ -73,13 +79,12 @@ def login():
 
         if user:
             session['login_attempts'] = 0
-
             if username == 'admin' and password == 'admin':
-                log_login(username, 200)  # Log successful admin login
+                log_login(username, 200, request.remote_addr)  # Log successful admin login
                 session['authenticated'] = {'username': username, 'password': password}
                 return redirect(url_for('admin'))
             else:
-                log_login(username, 200)  # Log successful user login
+                log_login(username, 200,request.remote_addr)  # Log successful user login
                 return redirect(url_for('success', username=bleach.clean(username)))
         else:
             session['login_attempts'] = session.get('login_attempts', 0) + 1
@@ -88,15 +93,16 @@ def login():
                 flash('Too many unsuccessful login attempts. Please try again later.', 'error')
                 return render_template('index.html', error_message='Login attempts error', show_attempts_error=True)
 
-            log_login(username, 401)  # Log unsuccessful login attempt
+            log_login(username, 401,request.remote_addr)  # Log unsuccessful login attempt
             return render_template('index.html', error_message='Invalid username or password. Please try again.')
 
     except ValueError as e:
+        log_login(username, 500,request.remote_addr)  # Log status code 500 for invalid input
         return str(e), 500
     except Exception as e:
+        log_login(username, 500,request.remote_addr)  # Log status code 500 for other exceptions
         app.logger.error(f"Exception: {str(e)}")
-        raise
-
+        return str(e), 500
 @app.route('/admin')
 def admin():
     if session.get('authenticated') and session['authenticated']['username'] == 'admin' and session['authenticated']['password'] == 'admin':
@@ -110,7 +116,7 @@ def get_login_logs():
         db = get_db()
         cursor = db.cursor(dictionary=True)
 
-        sql = "SELECT * FROM login_logs ORDER BY timestamp DESC LIMIT 10"
+        sql = "SELECT * FROM login_logs ORDER BY timestamp DESC LIMIT 100"
         cursor.execute(sql)
 
         login_logs = cursor.fetchall()
@@ -129,13 +135,13 @@ def success():
     username = request.args.get('username')
     return render_template('success.html', username=username)
 
-def log_login(username, status_code):
+def log_login(username, status_code,ip):
     try:
         db = get_db()
         cursor = db.cursor()
 
-        sql = "INSERT INTO login_logs (username, status_code) VALUES (%s, %s)"
-        values = (username, status_code)
+        sql = "INSERT INTO login_logs (username, status_code,ip) VALUES (%s, %s,%s)"
+        values = (username, status_code,ip)
         cursor.execute(sql, values)
 
         db.commit()
