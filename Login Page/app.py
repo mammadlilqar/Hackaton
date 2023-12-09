@@ -1,9 +1,16 @@
 from flask import Flask, render_template, request, redirect, url_for, g, session, flash
 import mysql.connector
 import os
+import bleach
+import re
 
 app = Flask(__name__, template_folder='template')
 app.secret_key = os.urandom(24).hex()
+
+sql_injection_pattern = re.compile(r"(\b(union|select|insert|delete|drop|alter|create)\b)|(^')", re.IGNORECASE)
+
+def is_input_safe(input_str):
+    return not bool(sql_injection_pattern.search(input_str))
 
 def get_db():
     if 'db' not in g:
@@ -43,6 +50,9 @@ def login():
     if session.get('login_attempts', 0) >= 4:
         flash('Too many unsuccessful login attempts. Please try again later.', 'error')
         return redirect(url_for('index', error_message='Login attempts error'))
+    
+    if not is_input_safe(username) or not is_input_safe(password):
+     raise ValueError('Invalid input. Possible SQL injection detected.')
 
     sql = "SELECT * FROM usrs WHERE name = %s AND password = %s"
     values = (username, password)
