@@ -2,17 +2,27 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Glassmorphism Login Form</title>
+  <title>Login</title>
   <!-- Include necessary stylesheets and scripts -->
   <link rel="stylesheet" href="../static/style.css">
 </head>
 <body>
+  <div id="flash-messages">
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="flash-messages">
+          {% for message in messages %}
+            <p class="flash-message">{{ message }}</p>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+  </div>
   <div class="background">
     <div class="shape"></div>
     <div class="shape"></div>
   </div>
-  v>
-  <form id="loginForm" action="http://127.0.0.1:5000/login" method="post">
+  <form id="loginForm" action="{{ url_for('login') }}" method="post">  <!-- Update the form action -->
     <h3>Login Here</h3>
     <label for="username">Username</label>
     <input type="text" placeholder="Email or Phone" id="username" name="username">
@@ -32,3 +42,5 @@
   <script src="../script.js"></script>
 </body>
 </html>
+
+
