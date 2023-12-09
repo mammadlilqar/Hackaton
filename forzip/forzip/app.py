@@ -3,12 +3,15 @@ from flask import Flask, render_template, request, redirect, session, url_for, g
 import os
 import mysql.connector
 import bleach
+from flask_wtf.csrf import CSRFProtect
 
 app = Flask(__name__, template_folder='template')
-
 app.secret_key = os.urandom(24).hex()
+csrf = CSRFProtect(app)
 
 sql_injection_pattern = re.compile(r"(\b(union|select|insert|delete|drop|alter|create|concat|substring|from|where|or)\b)|(^')|(--\s*comment)|(/\.\/)|\b(SELECT\s\\s*FROM\s*information_schema\.tables\b)|\b(SELECT\s\\s*FROM\s*information_schema\.columns\s*WHERE\s*table_name\s=\s*'TABLE-NAME-HERE'\b)|\b(SELECT\s*IF\s*\(\s*YOUR-CONDITION-HERE\s*,\s*\(SELECT\s*table_name\s*FROM\s*information_schema\.tables\),\s*'a'\))|\b(>\s*XPATH\s*syntax\s*error:\s*'\\secret'\b)|(\bQUERY-1-HERE;\s*QUERY-2-HERE\b)|(\b(HAVING\s*1=1|AND\s*1=1|AS\s*INJECTX\s*WHERE\s*1=1\s*AND\s*1=1|ORDER\s*BY\s*1--|ORDER\s*BY\s*1#|%' AND\s*8310=8311\s*AND\s*'%'\s*=\s*|sleep|;waitfor\s*delay\s*'0:0:5'--|pg_sleep|SLEEP\(5\)#)\b)", re.IGNORECASE)
+
+path_traversal_pattern = re.compile(r"(\.\./|/\.\./|\\\.\\\.\\|\\.\\\.\\)", re.IGNORECASE)
 
 xss_pattern = re.compile(r"<\s*script[^>]*>[^<]*<\s*/\s*script\s*>", re.IGNORECASE)
 
@@ -17,7 +20,10 @@ def is_input_safe(input_str):
         raise ValueError('XSS attack detected.')
     if sql_injection_pattern.search(input_str):
         raise ValueError('Invalid input. Possible SQL injection detected.')
+    if path_traversal_pattern.search(input_str):
+        raise ValueError('Path traversal detected.')
     return True
+
 
 def get_db():
     if 'db' not in g:
@@ -47,6 +53,7 @@ def index():
     return render_template('index.html')
 
 @app.route('/login', methods=['POST'])
+@csrf.exempt  # Exempt CSRF protection for this route
 def login():
     try:
         username = request.form.get('username')
@@ -66,7 +73,7 @@ def login():
         values = (username, password)
 
         if not is_input_safe(username) or not is_input_safe(password):
-            raise ValueError('Invalid input. Possible SQL injection or XSS attack detected.')
+            raise ValueError('Invalid input. Possible SQL injection, XSS attack, or path traversal detected.')
 
         db = get_db()
         cursor = db.cursor()
@@ -111,6 +118,20 @@ def admin():
     else:
         flash('Unauthorized access to admin page.', 'error')
         return redirect(url_for('index')) 
+    
+@app.route('/admin-panel')
+def admin_panel():
+    # Check if the user is authenticated as 'admin'
+    if session.get('authenticated') and session['authenticated']['username'] == 'admin' and session['authenticated']['password'] == 'admin':
+        # Render the admin panel for authenticated users
+        return render_template('admin_panel.html')
+    else:
+        # Redirect unauthorized users to the login page
+        flash('Unauthorized access to admin panel.', 'error')
+        return redirect(url_for('index'))
+
+    
+
 def get_login_logs():
     try:
         db = get_db()

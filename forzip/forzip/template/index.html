@@ -5,24 +5,23 @@
   <title>Login</title>
   <!-- Include necessary stylesheets and scripts -->
   <link rel="stylesheet" href="../static/style.css">
+  <meta name="csrf-token" content="{{ csrf_token() }}">  <!-- Include the CSRF token directly -->
 </head>
 <body>
   <div class="error-container">
-    {% if error_message %}
-        <p class="error-message">{{ error_message }}</p>
-    {% endif %}
-    {% if show_attempts_error %}
-        <p class="error-message">Failed login attempts exceed limit. Please try again later.</p>
-    {% endif %}
+   
+   
     {% if path_traversal_error %}
     <p class="error-message">Invalid input. Path traversal detected.</p>
     {% endif %}
-</div>
+  </div>
   <div class="background">
     <div class="shape"></div>
     <div class="shape"></div>
   </div>
-  <form id="loginForm" action="{{ url_for('login') }}" method="post">  <!-- Update the form action -->
+  <form id="loginForm" action="{{ url_for('login') }}" method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">  <!-- Include the CSRF token as a hidden field -->
+    
     <h3>Login Here</h3>
     <label for="username">Username</label>
     <input type="text" placeholder="Email or Phone" id="username" name="username">
@@ -42,5 +41,3 @@
   <script src="../script.js"></script>
 </body>
 </html>
-
-
